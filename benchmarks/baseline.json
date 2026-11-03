@@ -1,0 +1,321 @@
+{
+  "schema": 1,
+  "profile": "quick",
+  "created": "2026-11-03T22:15:11+0800",
+  "elapsed_s": 4.504,
+  "environment": {
+    "os": "Windows",
+    "release": "11",
+    "machine": "AMD64",
+    "python": "3.13.15",
+    "ezdxf": "1.4.5",
+    "agentcad": "0.1.0",
+    "cpu_count": 24,
+    "calibration_ms": 5.731,
+    "git": {
+      "commit": "59b8ba6",
+      "dirty": true
+    }
+  },
+  "samples": [
+    {
+      "name": "cli_help",
+      "group": "startup",
+      "n": 3,
+      "median_ms": 30.15,
+      "p90_ms": 32.389,
+      "min_ms": 30.031,
+      "max_ms": 32.949
+    },
+    {
+      "name": "create_drawing",
+      "group": "drawing",
+      "n": 5,
+      "median_ms": 14.194,
+      "p90_ms": 16.403,
+      "min_ms": 13.03,
+      "max_ms": 17.172,
+      "payload_kb": 0.33,
+      "extra": {
+        "note": "mechanical template, new file each call"
+      }
+    },
+    {
+      "name": "draw_from_spec",
+      "group": "drawing",
+      "n": 5,
+      "median_ms": 40.2,
+      "p90_ms": 42.146,
+      "min_ms": 39.677,
+      "max_ms": 42.313,
+      "payload_kb": 5.89,
+      "extra": {
+        "plan_size": 9
+      }
+    },
+    {
+      "name": "op_single_call",
+      "group": "ops",
+      "n": 8,
+      "median_ms": 49.806,
+      "p90_ms": 61.639,
+      "min_ms": 46.587,
+      "max_ms": 83.612,
+      "payload_kb": 0.92,
+      "extra": {
+        "note": "one op per call: lock, execute, save, independent validate"
+      }
+    },
+    {
+      "name": "op_batch_50",
+      "group": "ops",
+      "n": 5,
+      "median_ms": 63.38,
+      "p90_ms": 65.333,
+      "min_ms": 62.07,
+      "max_ms": 65.973,
+      "payload_kb": 4.23
+    },
+    {
+      "name": "op_dry_run",
+      "group": "ops",
+      "n": 5,
+      "median_ms": 23.752,
+      "p90_ms": 25.666,
+      "min_ms": 22.343,
+      "max_ms": 26.152,
+      "payload_kb": 8.98,
+      "extra": {
+        "note": "preview only: nothing is written"
+      }
+    },
+    {
+      "name": "op_strict",
+      "group": "ops",
+      "n": 4,
+      "median_ms": 58.685,
+      "p90_ms": 60.86,
+      "min_ms": 54.996,
+      "max_ms": 60.904,
+      "payload_kb": 1.01,
+      "extra": {
+        "note": "validation inside the transaction; a failure saves nothing"
+      }
+    },
+    {
+      "name": "read_drawing",
+      "group": "read",
+      "n": 8,
+      "median_ms": 29.389,
+      "p90_ms": 30.869,
+      "min_ms": 28.188,
+      "max_ms": 30.983,
+      "payload_kb": 4.4
+    },
+    {
+      "name": "inspect_entities",
+      "group": "read",
+      "n": 6,
+      "median_ms": 14.122,
+      "p90_ms": 15.93,
+      "min_ms": 13.639,
+      "max_ms": 16.911,
+      "payload_kb": 8.34,
+      "extra": {
+        "note": "default page: detail=true, limit=200"
+      }
+    },
+    {
+      "name": "validate_drawing",
+      "group": "read",
+      "n": 5,
+      "median_ms": 34.466,
+      "p90_ms": 35.194,
+      "min_ms": 31.609,
+      "max_ms": 35.66,
+      "payload_kb": 2.32
+    },
+    {
+      "name": "get_diff",
+      "group": "read",
+      "n": 5,
+      "median_ms": 24.531,
+      "p90_ms": 53.962,
+      "min_ms": 24.141,
+      "max_ms": 71.852,
+      "payload_kb": 0.5
+    },
+    {
+      "name": "history",
+      "group": "revision",
+      "n": 8,
+      "median_ms": 0.34,
+      "p90_ms": 0.389,
+      "min_ms": 0.334,
+      "max_ms": 0.422,
+      "payload_kb": 1.09
+    },
+    {
+      "name": "list_checkpoints",
+      "group": "revision",
+      "n": 8,
+      "median_ms": 0.271,
+      "p90_ms": 0.287,
+      "min_ms": 0.257,
+      "max_ms": 0.291,
+      "payload_kb": 0.66
+    },
+    {
+      "name": "rollback",
+      "group": "revision",
+      "n": 3,
+      "median_ms": 20.649,
+      "p90_ms": 21.043,
+      "min_ms": 19.494,
+      "max_ms": 21.141,
+      "payload_kb": 0.28,
+      "extra": {
+        "note": "restores the latest differing checkpoint"
+      }
+    },
+    {
+      "name": "recover",
+      "group": "revision",
+      "n": 3,
+      "median_ms": 12.941,
+      "p90_ms": 13.577,
+      "min_ms": 11.703,
+      "max_ms": 13.736,
+      "payload_kb": 0.48
+    },
+    {
+      "name": "list_operations",
+      "group": "discovery",
+      "n": 5,
+      "median_ms": 0.134,
+      "p90_ms": 0.162,
+      "min_ms": 0.115,
+      "max_ms": 0.168,
+      "payload_kb": 15.04,
+      "extra": {
+        "note": "compact index; payload is context the model must read"
+      }
+    },
+    {
+      "name": "list_operations_one",
+      "group": "discovery",
+      "n": 5,
+      "median_ms": 0.022,
+      "p90_ms": 0.026,
+      "min_ms": 0.022,
+      "max_ms": 0.027,
+      "payload_kb": 2.03
+    },
+    {
+      "name": "search_tools",
+      "group": "discovery",
+      "n": 8,
+      "median_ms": 0.7,
+      "p90_ms": 0.79,
+      "min_ms": 0.682,
+      "max_ms": 0.802,
+      "payload_kb": 1.6
+    },
+    {
+      "name": "drafting_session",
+      "group": "session",
+      "n": 1,
+      "median_ms": 291.574,
+      "p90_ms": 291.574,
+      "min_ms": 291.574,
+      "max_ms": 291.574,
+      "extra": {
+        "steps": [
+          {
+            "step": "draw_plate",
+            "ms": 50.61,
+            "payload_kb": 1.36
+          },
+          {
+            "step": "dimension",
+            "ms": 43.82,
+            "payload_kb": 1.04
+          },
+          {
+            "step": "note",
+            "ms": 42.51,
+            "payload_kb": 0.91
+          },
+          {
+            "step": "validate",
+            "ms": 24.43,
+            "payload_kb": 0.8
+          },
+          {
+            "step": "export_svg",
+            "ms": 47.26,
+            "payload_kb": 0.21
+          },
+          {
+            "step": "revise",
+            "ms": 42.73,
+            "payload_kb": 0.92
+          },
+          {
+            "step": "read",
+            "ms": 22.04,
+            "payload_kb": 2.8
+          },
+          {
+            "step": "rollback",
+            "ms": 18.02,
+            "payload_kb": 0.28
+          }
+        ]
+      }
+    }
+  ],
+  "quality": {
+    "passed": 6,
+    "total": 6,
+    "checks": [
+      {
+        "name": "plate_from_spec",
+        "passed": true,
+        "detail": "4 holes R4.0, 7 dimensions, 100.0x60.0 mm, validation passed",
+        "ms": 51.99
+      },
+      {
+        "name": "dimensions_attached",
+        "passed": true,
+        "detail": "3 dimensions attached to their geometry, validation passed",
+        "ms": 100.64
+      },
+      {
+        "name": "undo_restores",
+        "passed": true,
+        "detail": "rollback restored the exact prior file (sha match) and its d=6 circle",
+        "ms": 169.52
+      },
+      {
+        "name": "batch_family",
+        "passed": true,
+        "detail": "3/3 drawings written, radii [2.0, 2.5, 3.0]",
+        "ms": 177.3
+      },
+      {
+        "name": "revision_guard",
+        "passed": true,
+        "detail": "refused with STALE_REVISION, file unchanged",
+        "ms": 59.33
+      },
+      {
+        "name": "validation_catches",
+        "passed": true,
+        "detail": "OUT_OF_BOUNDS reported in the call's own validation",
+        "ms": 90.03
+      }
+    ]
+  },
+  "errors": []
+}

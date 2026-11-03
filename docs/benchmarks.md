@@ -1,6 +1,6 @@
 # Benchmarks
 
-Every benchmark and comparison AgentCAD has run, with what it compares, its caveats and links to the full reports, logs and graders. The [README](../README.md#results-at-a-glance) keeps one line per benchmark.
+Every benchmark and comparison AgentCAD has run, with what it compares, its caveats and links to the full reports, logs and graders. The [README](../README.md#results-at-a-glance) keeps one line per benchmark. For the local, no-LLM development benchmark (`python -m benchmarks`, about five seconds), see [benchmarks/README.md](../benchmarks/README.md); this page records results, not the measuring tool.
 
 **3D was removed on 2026-11-02** ([ADR-003](decision-record.md#adr-003移除三维零件)). The 3D results below (BenchCAD Vision2Code, BenchCAD 2, Parametric CAD Bench V3) are kept as the record that led to that decision; their harnesses ran against AgentCAD before that date and no longer run against the current code.
 
