@@ -21,7 +21,7 @@ from typing import Any, Callable
 import ezdxf
 from ezdxf import bbox
 
-from . import engine, guards, progress, spec as specmod
+from . import engine, guards, progress, repair, spec as specmod
 from .constraints import ENFORCE_TYPES, CHECK_TYPES, check_constraints, enforce_one
 from .errors import AgentCADError, input_error, policy_error
 from .metadata import all_meta, get_meta, set_meta
@@ -64,6 +64,51 @@ def _live_base(store, path: Path | None = None) -> str | None:
     return None
 
 
+def _suggested_call(name: str, fn_sig: inspect.Signature, self: "Runtime", args: tuple, kwargs: dict,
+                    patch: dict[str, Any]) -> dict[str, Any] | None:
+    """The rejected call with ``patch`` applied to its bound arguments, or None if it cannot be bound."""
+    try:
+        bound = fn_sig.bind(self, *args, **kwargs)
+    except TypeError:  # the call reached the tool through a signature bind rejects: offer nothing rather than guess
+        return None
+    arguments = {k: v for k, v in bound.arguments.items() if k != "self"}
+    unknown = sorted(set(patch) - set(fn_sig.parameters))
+    if unknown:  # a repair that names a parameter this tool does not take cannot be turned into a call
+        return None
+    arguments.update(patch)
+    return {"tool": name, "arguments": arguments}
+
+
+def _enrich_error(err: dict[str, Any], exc: AgentCADError, name: str, fn_sig: inspect.Signature,
+                  self: "Runtime", args: tuple, kwargs: dict) -> None:
+    """Promote ``details["repair"]`` into the error and add the repaired call to it."""
+    rep = exc.details.get("repair")
+    if not isinstance(rep, dict) or not rep:
+        return
+    err["repair"] = dict(rep)
+    operations = rep.get("suggested_operations")
+    if operations and "operations" in fn_sig.parameters:
+        call = _suggested_call(name, fn_sig, self, args, kwargs, {"operations": operations})
+        if call is not None:
+            err["repair"]["suggested_call"] = call
+        return
+    arguments = rep.get("suggested_arguments")
+    if isinstance(arguments, dict) and arguments:
+        call = _suggested_call(name, fn_sig, self, args, kwargs, arguments)
+        if call is not None:
+            err["repair"]["suggested_call"] = call
+
+
+def _overwrite_repair(rule: str = "file.exists") -> dict[str, Any]:
+    """A write the caller aimed at a path that already exists: offer the same call with overwrite.
+
+    Offered, never applied: replacing an existing file is the caller's decision, and
+    ``export_drawing`` re-rendering a preview is the case that produces it most often.
+    """
+    return {"kind": "suggest", "rule": rule, "confidence": 0.9,
+            "suggested_arguments": {"overwrite": True}}
+
+
 def tool(fn):
     """Wrap a Runtime method into the standard envelope with metrics and error capture."""
     name = fn.__name__
@@ -76,16 +121,22 @@ def tool(fn):
         in_bytes = len(json.dumps([args, kwargs], default=str))
         act, ops = self._activity(name, sig, args, kwargs)
         token = progress.begin(act) if act else None
+        repairs = repair.collect()
+        repairs.__enter__()
         try:
             payload = fn(self, *args, **kwargs)
             env = {"ok": True, "tool": name, **payload}
+            if repairs.items and not env.get("repaired"):  # rewritten calls outside engine.execute (selectors)
+                env["repaired"] = list(repairs.items)
         except AgentCADError as exc:
             env = {"ok": False, "tool": name, "error": exc.to_dict()}
+            _enrich_error(env["error"], exc, name, sig, self, args, kwargs)
         except Exception as exc:  # never leak a raw traceback as the only signal
             env = {"ok": False, "tool": name,
                    "error": AgentCADError("INTERNAL_ERROR", f"{type(exc).__name__}: {exc}", category="internal",
                                           details={"traceback": traceback.format_exc(limit=8)}).to_dict()}
         finally:
+            repairs.__exit__(None, None, None)
             if token is not None:
                 progress.end(token)
         if act:
@@ -350,7 +401,9 @@ class Runtime:
         u = normalize_unit(units)
         p, store = self._drawing(path, must_exist=False)
         if p.exists() and not overwrite:
-            raise input_error("FILE_EXISTS", f"{path} already exists", hint="Pass overwrite=true to replace it (a checkpoint is kept)")
+            raise input_error("FILE_EXISTS", f"{path} already exists",
+                              hint="Pass overwrite=true to replace it (a checkpoint is kept)",
+                              details={"repair": _overwrite_repair()})
         doc = setup_document(u, template, dxf_version, annotation_scale)
         with self._lock(store):
             info = store.commit(doc, label="create_drawing")
@@ -417,7 +470,8 @@ class Runtime:
         if ids:
             ents = select(doc, ids)
         elif filter:
-            ents = select(doc, {"layout": layout, **filter} if layout else filter, allow_empty=True)
+            ents = select(doc, {"layout": layout, **filter} if layout else filter, field="filter",
+                         allow_empty=True)
         else:
             ents = [e for sp in layout_spaces(doc, layout) for e in sp]
         if window is not None or polygon is not None:
@@ -462,9 +516,12 @@ class Runtime:
                                "error": exc.to_dict(), "file_unchanged": True})
                 raise
             if dry_run:
-                return {"drawing": self._rel(p), "dry_run": True, "would_change": _changes(res),
-                        "results": res["results"], "preview": {"revision": before["revision"],
-                            "preconditions": {"sha256": before["sha256"], "entities": before["entities"]}}}
+                out = {"drawing": self._rel(p), "dry_run": True, "would_change": _changes(res),
+                       "results": res["results"], "preview": {"revision": before["revision"],
+                           "preconditions": {"sha256": before["sha256"], "entities": before["entities"]}}}
+                if res.get("repaired"):
+                    out["repaired"] = res["repaired"]
+                return out
             data = dxf_bytes(doc)
             report = self._validate_bytes(data, requirements=requirements, bounds=bounds, layout=layout) if strict else None
             if report is not None and not report["passed"]:
@@ -484,6 +541,8 @@ class Runtime:
             report = self._validate_bytes(data, requirements=requirements, bounds=bounds, layout=layout)
         out = {"drawing": self._rel(p), "changes": _changes(res), "results": res["results"],
                "validation": _brief(report), "journal_seq": seq, **info}
+        if res.get("repaired"):
+            out["repaired"] = res["repaired"]
         if created:
             out["created_drawing"] = created
         return out
@@ -719,7 +778,8 @@ class Runtime:
         p, store = self._drawing(output, must_exist=False)
         if p.exists() and not overwrite:
             raise input_error("FILE_EXISTS", f"{output} already exists",
-                              hint="Use revise_drawing to change it, or overwrite=true to regenerate")
+                              hint="Use revise_drawing to change it, or overwrite=true to regenerate",
+                              details={"repair": _overwrite_repair()})
         doc = setup_document(compiled["units"], "mechanical", dxf_version)
         with self._lock(store):
             try:
@@ -971,7 +1031,8 @@ class Runtime:
                               hint="dxf | svg | json | pdf | png | dwg | csv | xlsx")
         out = self.policy.resolve(output, suffixes=(suffix,))
         if out.exists() and not overwrite:
-            raise input_error("FILE_EXISTS", f"{output} exists", hint="overwrite=true")
+            raise input_error("FILE_EXISTS", f"{output} exists", hint="Pass overwrite=true to replace it",
+                              details={"repair": _overwrite_repair()})
         if out == p:
             raise input_error("SAME_FILE", "Export target must differ from the source drawing")
         with self._lock(store) as store:
@@ -1079,7 +1140,8 @@ class Runtime:
         src = self.policy.resolve(source, must_exist=True, suffixes=(".dwg",))
         out, store = self._drawing(output, must_exist=False)
         if out.exists() and not overwrite:
-            raise input_error("FILE_EXISTS", f"{output} exists", hint="overwrite=true")
+            raise input_error("FILE_EXISTS", f"{output} exists", hint="Pass overwrite=true to replace it",
+                              details={"repair": _overwrite_repair()})
         jobs = self.policy.state_dir() / "acad"
         tmp = jobs / f"import-{out.stem}.dxf"
         info = autocad.dwg_to_dxf(src, tmp, jobs, "2018")

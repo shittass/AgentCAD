@@ -33,6 +33,7 @@ class AgentCADError(Exception):
         hint: str | None = None,
         partial_changes: bool = False,
         details: dict[str, Any] | None = None,
+        repair: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         assert category in CATEGORIES, category
@@ -46,6 +47,8 @@ class AgentCADError(Exception):
         self.hint = hint
         self.partial_changes = partial_changes
         self.details = details or {}
+        #: repair record for a rejected call: {kind, rule, confidence, candidates?, suggested_operations?}
+        self.repair = repair
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -64,6 +67,8 @@ class AgentCADError(Exception):
             d["hint"] = self.hint
         if self.details:
             d["details"] = self.details
+        if self.repair:
+            d["repair"] = self.repair
         return d
 
 

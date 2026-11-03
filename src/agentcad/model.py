@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from ezdxf.document import Drawing
 from ezdxf.entities import DXFGraphic
 
+from . import repair
 from .errors import input_error
 
 APPID = "AGENTCAD"
@@ -299,7 +300,28 @@ def measure_dimension(e: DXFGraphic) -> float | None:
 
 # --- selection ---------------------------------------------------------------
 
+def _check_filter_values(flt: dict[str, Any], field: str) -> None:
+    """Reject filter values ``_match`` cannot compare, instead of failing mid-match with a TypeError."""
+    for key in ("type", "layer"):
+        value = flt.get(key)
+        if value is None:
+            continue
+        items = value if isinstance(value, list) else [value]
+        if not items or not all(isinstance(v, str) and v for v in items):
+            raise input_error("BAD_SELECTOR", f"{field}: '{key}' expects a name or a list of names, got {value!r}",
+                              hint='For example {"layer": "HOLES"} or {"type": ["CIRCLE", "ARC"]}')
+    for key in ("tag", "tag_prefix"):
+        value = flt.get(key)
+        if value is not None and not isinstance(value, str):
+            raise input_error("BAD_SELECTOR", f"{field}: '{key}' expects a string, got {value!r}")
+
+
 def _match(e: DXFGraphic, flt: dict[str, Any]) -> bool:
+    """Match one entity against the matching keys of a filter.
+
+    ``select`` validates the filter first and takes ``layout`` / ``all`` out, so
+    every key reaching here is one of ``type``, ``layer``, ``tag``, ``tag_prefix``.
+    """
     if "type" in flt:
         types = flt["type"] if isinstance(flt["type"], list) else [flt["type"]]
         if e.dxftype() not in {s.upper() for s in types}:
@@ -324,7 +346,8 @@ def select(doc: Drawing, sel: Any, refs: dict[int, list[str]] | None = None, *,
     Accepted forms: ``"1F"`` (handle, any layout), ``"tag:hole.1"`` (any layout), ``"$2"`` (entities
     created by op #2 of the current batch), a list of those, or a filter dict
     ``{"type": "CIRCLE", "layer": "HOLES", "tag_prefix": "hole.", "layout": "Sheet1"}``. A filter searches the
-    op's active layout unless it names one ('*' = all layouts).
+    op's active layout unless it names one ('*' = all layouts). A filter key that is neither accepted nor a
+    known misspelling is rejected with ``BAD_SELECTOR``: ignoring it would widen the selection to the layout.
     """
     out: list[DXFGraphic] = []
     keys = {sp.layout_key for sp in layout_spaces(doc, "*")}
@@ -335,11 +358,41 @@ def select(doc: Drawing, sel: Any, refs: dict[int, list[str]] | None = None, *,
         if not sel:
             raise input_error("EMPTY_SELECTOR", f"{field}: empty filter would select everything",
                               hint='Use {"all": true} to explicitly select all entities')
-        spaces = layout_spaces(doc, sel.get("layout", ACTIVE_LAYOUT.get()))
-        if sel.get("all") is True:
+        flt, repairs = repair.normalize_filter(sel)
+        for rec in repairs:
+            repair.note(rec)
+        unknown = [k for k in flt if k not in repair.SELECTOR_KEYS]
+        if unknown:  # an ignored key widens the selection, which is how a whole drawing gets deleted
+            candidates = repair.suggest_selector_keys(unknown)
+            fixed = dict(flt)
+            for key in unknown:
+                hit = next((c for c in candidates if c["for"] == key), None)
+                if hit is None or hit["key"] in fixed:
+                    break
+                fixed[hit["key"]] = fixed.pop(key)
+            else:  # every unknown key maps to a distinct accepted key: offer the ready-to-send filter
+                raise input_error("BAD_SELECTOR", f"{field}: unknown filter key(s) {unknown}",
+                                  details={"repair": {"kind": "suggest", "rule": "selector.key",
+                                                      "candidates": candidates, "suggested_filter": fixed,
+                                                      "suggested_arguments": {field: fixed}}},
+                                  hint=f"Filter keys: {', '.join(repair.SELECTOR_KEYS)}")
+            raise input_error("BAD_SELECTOR", f"{field}: unknown filter key(s) {unknown}",
+                              details={"repair": {"kind": "suggest", "rule": "selector.key",
+                                                  "candidates": candidates}},
+                              hint=f"Filter keys: {', '.join(repair.SELECTOR_KEYS)}")
+        spaces = layout_spaces(doc, flt.pop("layout", ACTIVE_LAYOUT.get()))
+        include_all = flt.pop("all", None)
+        if include_all is not None and not isinstance(include_all, bool):
+            raise input_error("BAD_SELECTOR", f"{field}: 'all' must be true or false, got {include_all!r}",
+                              hint='Use {"all": true} to select every entity of the layout')
+        if include_all:
             out = [e for sp in spaces for e in sp]
         else:
-            out = [e for sp in spaces for e in sp if _match(e, sel)]
+            _check_filter_values(flt, field)
+            if not flt:  # nothing left to match on: {"all": false} must not become "everything"
+                raise input_error("EMPTY_SELECTOR", f"{field}: filter would select everything in the layout",
+                                  hint='Add a matching key, or use {"all": true} to select every entity')
+            out = [e for sp in spaces for e in sp if _match(e, flt)]
     elif isinstance(sel, str):
         s = sel.strip()
         if s.startswith("$"):

@@ -65,13 +65,14 @@ def point(value, name):
 
 def operations(ctx, items):
     """Reuse primitive validation and policy inside one surrounding transaction."""
-    from ..engine import prevalidate
+    from ..engine import canonical_op, prevalidate
     from ..ops import REGISTRY
 
     results = []
-    for raw, params in zip(items, prevalidate(items, ctx.unit, ctx.policy)):
+    validated, _repairs = prevalidate(items, ctx.unit, ctx.policy)
+    for raw, params in zip(items, validated):
         params.pop("layout", None)
-        results.append(REGISTRY[raw["op"]].fn(ctx, **params))
+        results.append(REGISTRY[canonical_op(raw["op"])].fn(ctx, **params))
     return results
 
 
