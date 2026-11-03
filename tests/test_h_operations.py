@@ -413,8 +413,11 @@ def test_blocks_and_attributes(rt, ws, blank):
 def test_unknown_op_and_param_are_diagnosable(rt, blank):
     e = err(apply(rt, blank, [{"op": "add_cirle", "center": [0, 0], "radius": 1}]))
     assert e["code"] == "UNKNOWN_OP" and "add_circle" in e["hint"] and e["op_index"] == 0
-    e = err(apply(rt, blank, [{"op": "add_circle", "center": [0, 0], "radius": 1, "colour": 3}]))
-    assert e["code"] == "UNKNOWN_PARAM" and "color" in e["hint"]
+    e = err(apply(rt, blank, [{"op": "add_circle", "center": [0, 0], "radius": 1, "diamter": 3}]))
+    assert e["code"] == "UNKNOWN_PARAM" and "diameter" in e["hint"]
+    # a name that only differs by a known alias is rewritten, not rejected
+    r = ok(apply(rt, blank, [{"op": "add_circle", "center": [0, 0], "radius": 1, "colour": 3}]))
+    assert any(x["from"] == "colour" and x["to"] == "color" for x in r.get("repaired", []))
 
 
 def test_batch_refs_and_tags(rt, ws, blank):
