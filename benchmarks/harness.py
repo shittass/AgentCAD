@@ -326,6 +326,17 @@ def render(result: dict[str, Any], comparisons: list[Comparison] | None = None) 
     lines += ["", f"quality: {quality['passed']}/{quality['total']} checks passed"]
     for c in quality["checks"]:
         lines.append(f"  {'PASS' if c['passed'] else 'FAIL'}  {c['name']:<28} {c['detail']}")
+    repair = result.get("repair") or {}
+    if repair:
+        eligible = repair.get("eligible", 0)
+        pct = f"{100 * repair.get('repair_rate', 0):.0f}%"
+        lines += ["", f"repair: {repair.get('auto', 0) + repair.get('suggested', 0)}/{eligible} "
+                      f"broken calls became the intended call ({pct})"
+                      f" | zero-turn {repair.get('auto', 0)} | one resend {repair.get('suggested', 0)}"
+                      f" | misses {repair.get('miss', 0)}"]
+        lines.append(f"  false repairs {repair.get('false_repair', 0)}/{repair.get('controls', 0)} controls"
+                     f" | candidate top-1 {100 * (repair.get('candidates') or {}).get('top1', 0):.1f}%"
+                     f" over {(repair.get('candidates') or {}).get('variants', 0)} misspellings")
     if comparisons:
         slower = [c for c in comparisons if c.status == "slower"]
         faster = [c for c in comparisons if c.status == "faster"]
