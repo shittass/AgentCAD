@@ -14,7 +14,8 @@ This one answers the question a change raises: *did it get slower, or did it bre
 ```
 
 A run prints one row per workload, the delta
-against the recorded baseline, the six quality checks, and the step breakdown of a drafting session:
+against the recorded baseline, the six quality checks, the repair rate, and the step breakdown of a
+drafting session:
 
 ```
 AgentCAD quick benchmark | Windows 11 | Python 3.13.15 | ezdxf 1.4.5 | 24 CPUs | 59b8ba6
@@ -23,7 +24,9 @@ ops         op_single_call                   8    50.37 ms    62.20 ms    0.9 KB
 ops         op_batch_50                      5    63.54 ms    64.84 ms    4.2 KB     1.00x
 ...
 quality: 6/6 checks passed
-elapsed: 4.2 s
+repair: 11/11 broken calls became the intended call (100%) | zero-turn 9 | one resend 2 | misses 0
+  false repairs 0/3 controls | candidate top-1 99.2% over 261 misspellings
+elapsed: 5.4 s
 ```
 
 `median` is the usual number to read; `p90` shows the tail. `payload` is the JSON the call returns,
@@ -92,6 +95,30 @@ from the runtime's own report. They fail the process exit code:
 | `batch_family` | `apply_batch` writes three independent drawings with the requested diameters |
 | `revision_guard` | A stale `expected_revision` is refused with `STALE_REVISION` and does not touch the file |
 | `validation_catches` | Geometry outside `bounds` is reported as `OUT_OF_BOUNDS`, not silently committed |
+
+## The repair rate
+
+Every run also replays a fixed corpus of calls an agent plausibly writes that the runtime would
+reject — a wrong operation name, a wrong parameter name, a mis-cased enum, a misspelled selector
+key — and checks that the repair layer turns each into the call it meant. Each case runs twice in
+fresh drawings: the canonical call first, so the expected drawing is the runtime's own output.
+
+| Outcome | Meaning |
+|---|---|
+| `auto` | rewritten in place, executes, and produces the intended drawing — **no round-trip** |
+| `suggested` | rejected, but `error.repair.suggested_call` replays into the intended drawing — **one resend, no guessing** |
+| `miss` | neither |
+| `false repair` | a correct control call the layer rewrote — must stay 0 |
+
+`repair_rate = (auto + suggested) / eligible`. The run fails (exit code 1, like a failed check)
+when the rate drops below `REPAIR_FLOOR = 0.9` in `benchmarks/repair.py` or when a control call is
+rewritten. The corpus is a regression gate, not a sample of model behaviour: its rate is 100% by
+construction, and a dropped alias or a broken wiring path is what makes it fall.
+
+`candidate top-1` is the pure matcher's accuracy on deterministic misspellings of the 71 registered
+operations — a number that does not depend on the corpus. `--json` carries the per-case outcomes
+under `repair`; the rates measured on recorded agent traces are in
+[docs/repair-report.md](../docs/repair-report.md).
 
 ## Adding a workload
 

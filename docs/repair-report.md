@@ -11,6 +11,31 @@
 - The generic matcher is accurate but not authoritative: on the 18 candidates it offered, 8 were right (precision@1 44.4%); its single automatic rewrite (the enum fold) was right.
 - The synthetic sweep is the precision figure that does not depend on which mistakes a model happened to make: **97.5% top-1 over 2,294 misspellings of the 71 registry operations** and **99.5% over 1,311 misspellings of required parameter names**.
 
+## Repair rate
+
+A repair rate is only meaningful with its denominator stated, because the populations differ by two orders of magnitude:
+
+> **repair rate** = calls the layer turns into the call the caller meant / calls that would otherwise have failed.
+
+Two flavours are reported: **zero-turn** (rewritten in place, no resend) and **one-resend** (rejected, but the error carries a `suggested_call` that replays into the intended drawing).
+
+| Population | Denominator | Repaired | Repair rate | Zero-turn |
+|---|---:|---:|---:|---:|
+| Fixed benchmark corpus (`python -m benchmarks`) | 11 | 11 | **100%** | 81.8% (9/11) |
+| Recorded traces, repairable-namespace errors | 96 | 8 | 8.3% | 1.0% (1/96) |
+| Recorded traces, all AgentCAD errors | 1,081 | 8 | 0.7% | 0.1% |
+| Candidate ranking, synthetic operation misspellings | 2,294 | 2,238 | 97.5% (top-1) | — |
+
+Read the rows in order:
+
+- **100% on the benchmark corpus is by construction.** Every case is a call the tables know how to fix, so the number is a regression gate, not a claim about agents: a dropped alias or a broken wiring path shows up as a lower rate, and a rewritten correct call (`false_repair`) fails the run outright. The floor is `REPAIR_FLOOR = 0.9` in `benchmarks/repair.py`.
+- **8.3% on the recorded errors is what this checkout can do.** Two thirds of that population are 3D part operations (`modify_feature`, `pad`, `pocket`) whose runtime is not in this repository, so their parameter schema cannot be repaired here; the rest are value errors. The single zero-turn conversion is `add_text.align "MIDDLE_CENTER" → "middle_center"`.
+- **0.7% of all errors is the end-to-end number**, because 44% of those errors never reach the runtime (the client refuses a bare tool name) and most of the rest are semantic failures, not name mistakes.
+
+The live counterpart is `Runtime.get_metrics()["repair"]`: `repaired_calls`, `repairs`, `suggested_calls`, and `rate = repaired_calls / (repaired_calls + failures)` for the calls this process actually served.
+
+The benchmark runs the fixed corpus on every `python -m benchmarks` (a second or two) and fails the exit code when the rate drops below the floor or a control call is rewritten. `scripts/replay_repairs.py` produces the trace rates; `docs/repair-report.md` (this file) is where both are recorded.
+
 ## Corpora
 
 | Corpus | Tasks | Tool calls | AgentCAD calls | Errors | Addressable | Converted |

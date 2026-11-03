@@ -150,7 +150,10 @@ def tool(fn):
                 env["viewer_url"] = url
         env["metrics"] = {"duration_ms": round((time.perf_counter() - t0) * 1000, 2), "input_bytes": in_bytes,
                           "output_bytes": len(json.dumps(env, default=str))}
-        self.metrics.append({"tool": name, "ok": env["ok"], **env["metrics"]})
+        applied = len(env.get("repaired") or [])
+        offered = bool(not env["ok"] and (env["error"] or {}).get("repair"))
+        self.metrics.append({"tool": name, "ok": env["ok"], **env["metrics"],
+                             "repaired": applied, "repair_offered": offered})
         return env
 
     TOOLS[name] = fn
@@ -1449,10 +1452,17 @@ class Runtime:
     def get_metrics(self) -> dict[str, Any]:
         calls = len(self.metrics)
         fails = sum(1 for m in self.metrics if not m["ok"])
+        repaired_calls = sum(1 for m in self.metrics if m.get("repaired"))
+        repairs = sum(m.get("repaired", 0) for m in self.metrics)
+        offered = sum(1 for m in self.metrics if m.get("repair_offered"))
+        needing = repaired_calls + fails  # calls that failed or would have without the repair layer
         return {"tool_calls": calls, "failures": fails,
                 "total_duration_ms": round(sum(m["duration_ms"] for m in self.metrics), 2),
                 "input_bytes": sum(m["input_bytes"] for m in self.metrics),
                 "output_bytes": sum(m["output_bytes"] for m in self.metrics),
+                "repair": {"repaired_calls": repaired_calls, "repairs": repairs,
+                           "suggested_calls": offered,
+                           "rate": round(repaired_calls / needing, 3) if needing else None},
                 "model_calls": 0, "model_cost_usd": 0.0, "calls": self.metrics[-200:]}
 
 

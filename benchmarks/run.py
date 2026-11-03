@@ -23,6 +23,7 @@ from typing import Any
 from .harness import (BASELINE, DEFAULT_TOLERANCE, compare_samples, env_matches, environment, load_json,
                       regressions, render, result_dict, save_json)
 from .quality import run_quality
+from .repair import FALSE_REPAIR_LIMIT, REPAIR_FLOOR, candidate_top1, measure as measure_repair
 from .workloads import WORKLOADS, Context, select
 
 
@@ -54,6 +55,7 @@ def run(profile: str = "quick", only: list[str] | None = None, repeat: int | Non
             print(f"workload {workload.name!r} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
     checks = run_quality(work, runtime) if quality else []
     result = result_dict(profile, env, samples, checks, time.perf_counter() - started)
+    result["repair"] = {**measure_repair(work / "repair"), "candidates": candidate_top1()} if quality else {}
     result["errors"] = errors
     result["work_dir"] = str(work)
     return result
@@ -120,7 +122,10 @@ def main(argv: list[str] | None = None) -> int:
 
     failed = [c for c in result["quality"]["checks"] if not c["passed"]]
     regressed = regressions(comparisons) if args.gate else []
-    if result["errors"] or failed or regressed:
+    repair = result.get("repair") or {}
+    repair_failed = bool(repair) and (repair.get("repair_rate", 1.0) < REPAIR_FLOOR
+                                      or repair.get("false_repair", 0) > FALSE_REPAIR_LIMIT)
+    if result["errors"] or failed or regressed or repair_failed:
         for error in result["errors"]:
             print(f"FAILED workload {error['workload']}: {error['error']}", file=sys.stderr)
         for check in failed:
@@ -128,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
         for cmp in regressed:
             print(f"FAILED gate {cmp.name}: {cmp.current_ms:.2f} ms vs {cmp.baseline_ms:.2f} ms "
                   f"({cmp.ratio:.2f}x)", file=sys.stderr)
+        if repair_failed:
+            print(f"FAILED repair: rate {repair.get('repair_rate')} (floor {REPAIR_FLOOR}), "
+                  f"false repairs {repair.get('false_repair')} "
+                  f"(limit {FALSE_REPAIR_LIMIT})", file=sys.stderr)
         return 1
     return 0
 
