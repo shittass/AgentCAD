@@ -144,6 +144,7 @@ Your agent can already write code. It still can't do CAD: asked to edit a drawin
 |---|---|
 | [docs/tutorial.md](docs/tutorial.md) | Step-by-step tutorial: generate, validate, revise, roll back, DWG, connecting agents |
 | [docs/architecture.md](docs/architecture.md) | Architecture, data model, transactions, error envelope |
+| [docs/code-map.md](docs/code-map.md) | Code map: every module, call chains, invariants, extension guide, hotspots and risks |
 | [docs/operations.md](docs/operations.md) | Reference for every operation (generated from code) |
 | [docs/viewer.md](docs/viewer.md) | Live viewer: watch drawings and 3D parts change in the browser, timeline, diffs |
 | [docs/benchmarks.md](docs/benchmarks.md) | Every benchmark and comparison: results, caveats, and the full reports with run logs and graders |
