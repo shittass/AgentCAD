@@ -32,7 +32,9 @@ Not isolated by a worktree:
 
 1. Run the tests that cover what you changed (`python -m pytest ... tests/test_k_pdf.py`). They must
    pass. The full suite (about 13 minutes here) runs in CI on every PR; run it locally only when the
-   change reaches across many modules.
+   change reaches across many modules. For a change on a hot path (`service.py`, `store.py`,
+   `engine.py`, `validate/`, `ops/`), also run `python -m benchmarks` (a few seconds, no LLM or
+   AutoCAD; `--save` records your machine's baseline once) and say in the PR whether the numbers moved.
 2. Stage only the files you changed, by path (`git add -- src/agentcad/plot.py tests/test_k_pdf.py`).
    Never `git add .`, `git add -A` or a whole directory: in a shared checkout that commits another
    agent's unfinished work.

@@ -66,6 +66,15 @@ uv pip install --python .venv -e ".[dev]"
 > - Undo that.
 > - Make an A3 sheet for plate.dxf with a 1:2 viewport and drawing number MP-240 in the title block.
 
+**Measure a change.** The development benchmark runs the runtime itself, without an LLM or AutoCAD: per-call latency through the transaction layer, the payloads an agent pays for, and six deterministic drawing checks. It takes about five seconds; `--profile full` adds the MCP path, exports and a 2,000-entity drawing.
+
+```bash
+.venv/bin/python -m benchmarks        # Windows: .venv\Scripts\python
+.venv/bin/python -m benchmarks --save # record this machine's baseline once
+```
+
+How to read the numbers, and why the baseline is per machine: [benchmarks/README.md](benchmarks/README.md).
+
 ## Why AgentCAD
 
 Your agent can already write code. It still can't do CAD: asked to edit a drawing, it writes a throwaway script against a DXF library. That works until it doesn't: the script overwrites the file, there is no undo, nobody checks the result, and the next session has no idea what the last one changed. AgentCAD gives the agent a CAD runtime instead:
@@ -138,6 +147,7 @@ Your agent can already write code. It still can't do CAD: asked to edit a drawin
 | [docs/operations.md](docs/operations.md) | Reference for every operation (generated from code) |
 | [docs/viewer.md](docs/viewer.md) | Live viewer: watch drawings and 3D parts change in the browser, timeline, diffs |
 | [docs/benchmarks.md](docs/benchmarks.md) | Every benchmark and comparison: results, caveats, and the full reports with run logs and graders |
+| [benchmarks/README.md](benchmarks/README.md) | Local development benchmark: workload groups, baseline, quality checks, adding a workload |
 | [docs/limitations-roadmap.md](docs/limitations-roadmap.md) | Known limitations and roadmap |
 
 ## License
